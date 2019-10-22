@@ -346,7 +346,6 @@ fn main() -> Result<()> {
     }
 
     // Save the new hash
-    println!("Writing to {:?}", hash_path);
     std::fs::write(&hash_path, hash_str)?;
     Ok(())
 }
