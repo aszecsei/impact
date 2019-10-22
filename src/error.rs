@@ -13,7 +13,9 @@ pub enum ImpactError {
     #[fail(display = "Image error: {}", err)]
     ImageError {
         err: image::ImageError,
-    }
+    },
+    #[fail(display = "can't fit image in atlas")]
+    CantFitError,
 }
 
 impl From<std::io::Error> for ImpactError {

@@ -2,18 +2,19 @@ use std::path::PathBuf;
 use structopt::StructOpt;
 use metrohash::{MetroHash};
 use std::hash::{Hash, Hasher};
-use std::fs::{File, metadata};
-use std::io::BufReader;
-use std::io::prelude::*;
+use std::fs::metadata;
 
 mod bin_packs;
 mod error;
+mod image_wrapper;
 mod packer;
 mod path_glob;
 mod rect;
+mod serial;
 
 use error::Result;
 use path_glob::Glob;
+use image_wrapper::ImageWrapper;
 
 /// A texture packer
 #[derive(StructOpt, Debug, Hash)]
@@ -76,7 +77,7 @@ struct Opt {
     inputs: Vec<PathBuf>,
 }
 
-fn hash_files(path: &PathBuf, hasher: &mut std::hash::Hasher) -> Result<()> {
+fn hash_files(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> {
     let dir_iter = std::fs::read_dir(path)?;
     for dir in dir_iter {
         let dir = dir?;
@@ -89,26 +90,27 @@ fn hash_files(path: &PathBuf, hasher: &mut std::hash::Hasher) -> Result<()> {
     Ok(())
 }
 
-fn hash_file(path: &PathBuf, hasher: &mut std::hash::Hasher) -> Result<()> {
+fn hash_file(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> {
     let bytes = std::fs::read(path)?;
     hasher.write(&bytes);
     Ok(())
 }
 
-fn load_image<P: AsRef<std::path::Path>>(path: P, images: &mut Vec<image::DynamicImage>) -> Result<()> {
-    let img = image::open(path)?;
+fn load_image<P: AsRef<std::path::Path>>(path: P, images: &mut Vec<ImageWrapper>, opt: &Opt) -> Result<()> {
+    let img = image::open(path.as_ref().clone())?.to_rgba();
+    let img = ImageWrapper::new(img, String::from(path.as_ref().to_str().unwrap()), opt.premultiply, opt.trim);
     images.push(img);
     Ok(())
 }
 
-fn load_images<P: AsRef<std::path::Path>>(path: P, images: &mut Vec<image::DynamicImage>) -> Result<()> {
+fn load_images<P: AsRef<std::path::Path>>(path: P, images: &mut Vec<ImageWrapper>, opt: &Opt) -> Result<()> {
     let dir_iter = std::fs::read_dir(path)?;
     for dir in dir_iter {
         let dir = dir?;
         if dir.metadata()?.is_dir() {
-            load_images(&dir.path(), images)?;
+            load_images(&dir.path(), images, opt)?;
         } else {
-            load_image(&dir.path(), images)?;
+            load_image(&dir.path(), images, opt)?;
         }
     }
     Ok(())
@@ -196,27 +198,107 @@ fn main() -> Result<()> {
     if opt.verbose {
         println!("loading images...");
     }
-    let images = vec![];
+    let mut images = vec![];
     for input in &opt.inputs {
         let md = metadata(input)?;
         if md.is_dir() {
-            load_images(input, &mut images)?;
+            load_images(input, &mut images, &opt)?;
         } else {
-            load_image(input, &mut images)?;
+            load_image(input, &mut images, &opt)?;
         }
     }
 
     // Sort the bitmaps by area
+    images.sort_unstable_by(|a: &ImageWrapper, b: &ImageWrapper| {
+        (a.width * a.height).cmp(&(b.width * b.height))
+    });
 
     // Pack the bitmaps
+    let mut packers = vec![];
+    while !images.is_empty() {
+        if opt.verbose {
+            println!("packing {} images...", images.len());
+        }
+        let mut packer = packer::Packer::new(opt.size as i32, opt.size as i32, opt.pad as i32);
+        packer.pack(&mut images, opt.verbose, opt.unique, opt.rotate);
+        
+        if opt.verbose {
+            println!("finished packing {} - ({}x{})", packers.len(), packer.width, packer.height);
+        }
+        if packer.images.is_empty() {
+            eprintln!("packing failed, could not fit image {}", images.first().unwrap().name);
+            return Err(error::ImpactError::CantFitError);
+        }
+        packers.push(packer);
+    }
 
     // Save the atlas image
+    for (idx, packer) in packers.iter().enumerate() {
+        let out_path = output_dir.join(&format!("{}{}", output_name.to_string_lossy(), idx)).with_extension(".png");
+        if opt.verbose {
+            println!("writing png {}", out_path.display());
+        }
+        packer.save_png(output_dir.join(output_name).with_extension(".png"))?;
+    }
+
+    // Create info
+    let mut atlas = serial::Atlas {
+        textures: vec![],
+    };
+
+    for (idx, packer) in packers.iter().enumerate() {
+        let name = output_name.to_string_lossy();
+        let mut texture = serial::Texture {
+            name: format!("{}{}", name, idx),
+            images: vec![],
+        };
+        for (img_idx, img) in packer.images.iter().enumerate() {
+            let p = &packer.points[img_idx];
+            let s_img = serial::Image {
+                x: p.x,
+                y: p.y,
+                width: img.width,
+                height: img.height,
+                frame_x: img.frame_x,
+                frame_y: img.frame_y,
+                frame_width: img.frame_w,
+                frame_height: img.frame_h,
+                rotated: p.rot,
+            };
+            texture.images.push(s_img);
+        }
+        atlas.textures.push(texture);
+    }
 
     // Save the atlas binary
+    if opt.binary {
+        let out_path = output_dir.join(&format!("{}", output_name.to_string_lossy())).with_extension(".bin");
+        if opt.verbose {
+            println!("writing binary {}", out_path.display());
+        }
+        let res = bincode::serialize(&atlas).expect("failed to serialize into binary data");
+        std::fs::write(out_path, &res)?;
+    }
 
     // Save the atlas xml
+    if opt.xml {
+        let out_path = output_dir.join(&format!("{}", output_name.to_string_lossy())).with_extension(".xml");
+        if opt.verbose {
+            println!("writing xml {}", out_path.display());
+        }
+        let res = serde_xml_rs::to_string(&atlas).expect("failed to serialize into xml");
+        std::fs::write(out_path, &res)?;
+    }
 
     // Save the atlas json
+    if opt.json {
+        let out_path = output_dir.join(&format!("{}", output_name.to_string_lossy())).with_extension(".json");
+        if opt.verbose {
+            println!("writing json {}", out_path.display());
+        }
+        let res = serde_json::to_vec(&atlas).expect("failed to serialize into json");
+        std::fs::write(out_path, &res)?;
+    }
 
     // Save the new hash
     std::fs::write(&hash_path, hash_str)?;
