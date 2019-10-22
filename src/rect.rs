@@ -1,4 +1,3 @@
-
 #[derive(Debug, Clone)]
 pub struct RectSize {
     pub width: i32,
@@ -15,20 +14,20 @@ pub struct Rect {
 
 impl Rect {
     /// Performs a lexicographic compare on (rect short side, rect long side).
-    pub fn compareRectShortSide(&self, b: &Rect) -> std::cmp::Ordering {
-        let smallerSideA = std::cmp::min(self.width, self.height);
-        let smallerSideB = std::cmp::min(b.width, b.height);
-        if smallerSideA != smallerSideB {
-            return smallerSideA.cmp(&smallerSideB);
+    pub fn compare_rect_short_side(&self, b: &Rect) -> std::cmp::Ordering {
+        let smaller_side_a = std::cmp::min(self.width, self.height);
+        let smaller_side_b = std::cmp::min(b.width, b.height);
+        if smaller_side_a != smaller_side_b {
+            return smaller_side_a.cmp(&smaller_side_b);
         }
 
         // Tie-break on larger side
-        let largerSideA = std::cmp::max(self.width, self.height);
-        let largerSideB = std::cmp::max(b.width, b.height);
-        return largerSideA.cmp(&largerSideB);
+        let larger_side_a = std::cmp::max(self.width, self.height);
+        let larger_side_b = std::cmp::max(b.width, b.height);
+        return larger_side_a.cmp(&larger_side_b);
     }
 
-    pub fn nodeSortCmp(a: &Rect, b: &Rect) -> std::cmp::Ordering {
+    pub fn node_sort_cmp(a: &Rect, b: &Rect) -> std::cmp::Ordering {
         if a.x != b.x {
             return a.x.cmp(&b.x);
         }
@@ -41,10 +40,11 @@ impl Rect {
         return a.height.cmp(&b.height);
     }
 
-    pub fn isContainedIn(&self, b: &Rect) -> bool {
-        self.x >= b.x && self.y >= b.y &&
-            self.x + self.width <= b.x + b.width &&
-            self.y + self.height <= b.y + b.height
+    pub fn is_contained_in(&self, b: &Rect) -> bool {
+        self.x >= b.x
+            && self.y >= b.y
+            && self.x + self.width <= b.x + b.width
+            && self.y + self.height <= b.y + b.height
     }
 }
 
@@ -92,8 +92,5 @@ impl DisjointRectCollection {
 }
 
 fn disjoint(a: &Rect, b: &Rect) -> bool {
-    a.x + a.width <= b.x ||
-        b.x + b.width <= a.x ||
-        a.y + a.height <= b.y ||
-        b.y + b.height <= a.y
+    a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y
 }

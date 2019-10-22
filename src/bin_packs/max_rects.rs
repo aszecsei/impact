@@ -1,4 +1,4 @@
-use crate::rect::{Rect};
+use crate::rect::Rect;
 use std::convert::TryInto;
 
 #[derive(Debug, Copy, Clone)]
@@ -6,13 +6,13 @@ pub enum FreeRectChoiceHeuristic {
     /// BSSF: Positions the rectangle against the short side of a free rectangle into which it fits the best.
     RectBestShortSideFit,
     /// BLSF: Positions the rectangle against the long side of a free rectangle into which it fits the best.
-	RectBestLongSideFit, 
+    RectBestLongSideFit,
     /// BAF: Positions the rectangle into the smallest free rect into which it fits.
-	RectBestAreaFit, 
+    RectBestAreaFit,
     /// BL: Does the Tetris placement.
-	RectBottomLeftRule,
+    RectBottomLeftRule,
     /// CP: Choosest the placement where the rectangle touches other rects as much as possible.
-	RectContactPointRule, 
+    RectContactPointRule,
 }
 
 pub struct MaxRectsBinPack {
@@ -32,12 +32,17 @@ impl MaxRectsBinPack {
                 x: 0,
                 y: 0,
                 width,
-                height
+                height,
             }],
         }
     }
 
-    pub fn insert_list(&mut self, rects: &[Rect], rot: bool, method: FreeRectChoiceHeuristic) -> Vec<Rect> {
+    pub fn insert_list(
+        &mut self,
+        rects: &[Rect],
+        rot: bool,
+        method: FreeRectChoiceHeuristic,
+    ) -> Vec<Rect> {
         let mut dst = vec![];
         let mut rects = Vec::from(rects);
 
@@ -48,7 +53,8 @@ impl MaxRectsBinPack {
             let mut best_node = Rect::default();
 
             for (idx, rect) in rects.iter().enumerate() {
-                let (new_node, score1, score2) = self.score_rect(rect.width, rect.height, rot, method);
+                let (new_node, score1, score2) =
+                    self.score_rect(rect.width, rect.height, rot, method);
 
                 if score1 < best_score_1 || (score1 == best_score_1 && score2 < best_score_2) {
                     best_score_1 = score1;
@@ -70,16 +76,30 @@ impl MaxRectsBinPack {
         dst
     }
 
-    pub fn insert(&mut self, width: i32, height: i32, rot: bool, method: FreeRectChoiceHeuristic) -> Rect {
+    pub fn insert(
+        &mut self,
+        width: i32,
+        height: i32,
+        rot: bool,
+        method: FreeRectChoiceHeuristic,
+    ) -> Rect {
         let (new_node, _, _) = match method {
-            FreeRectChoiceHeuristic::RectBestShortSideFit => self.find_position_for_new_node_best_short_side_fit(rot, width, height),
-            FreeRectChoiceHeuristic::RectBottomLeftRule => self.find_position_for_new_node_bottom_left(rot, width, height),
+            FreeRectChoiceHeuristic::RectBestShortSideFit => {
+                self.find_position_for_new_node_best_short_side_fit(rot, width, height)
+            }
+            FreeRectChoiceHeuristic::RectBottomLeftRule => {
+                self.find_position_for_new_node_bottom_left(rot, width, height)
+            }
             FreeRectChoiceHeuristic::RectContactPointRule => {
                 let (a, b) = self.find_position_for_new_node_contact_point(rot, width, height);
                 (a, b, 0)
-            },
-            FreeRectChoiceHeuristic::RectBestLongSideFit => self.find_position_for_new_node_best_long_side_fit(rot, width, height),
-            FreeRectChoiceHeuristic::RectBestAreaFit => self.find_position_for_new_node_best_area_fit(rot, width, height),
+            }
+            FreeRectChoiceHeuristic::RectBestLongSideFit => {
+                self.find_position_for_new_node_best_long_side_fit(rot, width, height)
+            }
+            FreeRectChoiceHeuristic::RectBestAreaFit => {
+                self.find_position_for_new_node_best_area_fit(rot, width, height)
+            }
         };
 
         if new_node.height == 0 {
@@ -98,17 +118,31 @@ impl MaxRectsBinPack {
         (used_surface_area as f32) / ((self.bin_width * self.bin_height) as f32)
     }
 
-    fn score_rect(&self, width: i32, height: i32, rot: bool, method: FreeRectChoiceHeuristic) -> (Rect, i32, i32) {
+    fn score_rect(
+        &self,
+        width: i32,
+        height: i32,
+        rot: bool,
+        method: FreeRectChoiceHeuristic,
+    ) -> (Rect, i32, i32) {
         let (new_node, mut score1, mut score2) = match method {
-            FreeRectChoiceHeuristic::RectBestShortSideFit => self.find_position_for_new_node_best_short_side_fit(rot, width, height),
-            FreeRectChoiceHeuristic::RectBottomLeftRule => self.find_position_for_new_node_bottom_left(rot, width, height),
+            FreeRectChoiceHeuristic::RectBestShortSideFit => {
+                self.find_position_for_new_node_best_short_side_fit(rot, width, height)
+            }
+            FreeRectChoiceHeuristic::RectBottomLeftRule => {
+                self.find_position_for_new_node_bottom_left(rot, width, height)
+            }
             FreeRectChoiceHeuristic::RectContactPointRule => {
                 let (r, s1) = self.find_position_for_new_node_contact_point(rot, width, height);
                 // Reverse since we're minimizing, but for contact point score bigger is better
                 (r, -s1, i32::max_value())
-            },
-            FreeRectChoiceHeuristic::RectBestLongSideFit => self.find_position_for_new_node_best_long_side_fit(rot, width, height),
-            FreeRectChoiceHeuristic::RectBestAreaFit => self.find_position_for_new_node_best_area_fit(rot, width, height),
+            }
+            FreeRectChoiceHeuristic::RectBestLongSideFit => {
+                self.find_position_for_new_node_best_long_side_fit(rot, width, height)
+            }
+            FreeRectChoiceHeuristic::RectBestAreaFit => {
+                self.find_position_for_new_node_best_area_fit(rot, width, height)
+            }
         };
 
         // Cannot fit the current rectangle
@@ -159,7 +193,12 @@ impl MaxRectsBinPack {
 
         score
     }
-    fn find_position_for_new_node_bottom_left(&self, rot: bool, width: i32, height: i32) -> (Rect, i32, i32) {
+    fn find_position_for_new_node_bottom_left(
+        &self,
+        rot: bool,
+        width: i32,
+        height: i32,
+    ) -> (Rect, i32, i32) {
         let mut best_node = Rect::default();
 
         let mut best_y = i32::max_value();
@@ -193,7 +232,12 @@ impl MaxRectsBinPack {
 
         (best_node, best_y, best_x)
     }
-    fn find_position_for_new_node_best_short_side_fit(&self, rot: bool, width: i32, height: i32) -> (Rect, i32, i32) {
+    fn find_position_for_new_node_best_short_side_fit(
+        &self,
+        rot: bool,
+        width: i32,
+        height: i32,
+    ) -> (Rect, i32, i32) {
         let mut best_node = Rect::default();
 
         let mut best_short_side_fit = i32::max_value();
@@ -206,7 +250,9 @@ impl MaxRectsBinPack {
                 let leftover_vert = (rect.height - height).abs();
                 let short_side_fit = std::cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = std::cmp::max(leftover_horiz, leftover_vert);
-                if short_side_fit < best_short_side_fit || (short_side_fit == best_short_side_fit && long_side_fit < best_long_side_fit) {
+                if short_side_fit < best_short_side_fit
+                    || (short_side_fit == best_short_side_fit && long_side_fit < best_long_side_fit)
+                {
                     best_node.x = rect.x;
                     best_node.y = rect.y;
                     best_node.width = width;
@@ -220,7 +266,9 @@ impl MaxRectsBinPack {
                 let leftover_vert = (rect.height - width).abs();
                 let short_side_fit = std::cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = std::cmp::max(leftover_horiz, leftover_vert);
-                if short_side_fit < best_short_side_fit || (short_side_fit == best_short_side_fit && long_side_fit < best_long_side_fit) {
+                if short_side_fit < best_short_side_fit
+                    || (short_side_fit == best_short_side_fit && long_side_fit < best_long_side_fit)
+                {
                     best_node.x = rect.x;
                     best_node.y = rect.y;
                     best_node.width = height;
@@ -233,7 +281,12 @@ impl MaxRectsBinPack {
 
         (best_node, best_short_side_fit, best_long_side_fit)
     }
-    fn find_position_for_new_node_best_long_side_fit(&self, rot: bool, width: i32, height: i32) -> (Rect, i32, i32) {
+    fn find_position_for_new_node_best_long_side_fit(
+        &self,
+        rot: bool,
+        width: i32,
+        height: i32,
+    ) -> (Rect, i32, i32) {
         let mut best_node = Rect::default();
 
         let mut best_short_side_fit = i32::max_value();
@@ -246,7 +299,9 @@ impl MaxRectsBinPack {
                 let leftover_vert = (rect.height - height).abs();
                 let short_side_fit = std::cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = std::cmp::max(leftover_horiz, leftover_vert);
-                if long_side_fit < best_long_side_fit || (long_side_fit == best_long_side_fit && short_side_fit < best_short_side_fit) {
+                if long_side_fit < best_long_side_fit
+                    || (long_side_fit == best_long_side_fit && short_side_fit < best_short_side_fit)
+                {
                     best_node.x = rect.x;
                     best_node.y = rect.y;
                     best_node.width = width;
@@ -260,7 +315,9 @@ impl MaxRectsBinPack {
                 let leftover_vert = (rect.height - width).abs();
                 let short_side_fit = std::cmp::min(leftover_horiz, leftover_vert);
                 let long_side_fit = std::cmp::max(leftover_horiz, leftover_vert);
-                if long_side_fit < best_long_side_fit || (long_side_fit == best_long_side_fit && short_side_fit < best_short_side_fit) {
+                if long_side_fit < best_long_side_fit
+                    || (long_side_fit == best_long_side_fit && short_side_fit < best_short_side_fit)
+                {
                     best_node.x = rect.x;
                     best_node.y = rect.y;
                     best_node.width = height;
@@ -273,7 +330,12 @@ impl MaxRectsBinPack {
 
         (best_node, best_long_side_fit, best_short_side_fit)
     }
-    fn find_position_for_new_node_best_area_fit(&self, rot: bool, width: i32, height: i32) -> (Rect, i32, i32) {
+    fn find_position_for_new_node_best_area_fit(
+        &self,
+        rot: bool,
+        width: i32,
+        height: i32,
+    ) -> (Rect, i32, i32) {
         let mut best_node = Rect::default();
 
         let mut best_area_fit = i32::max_value();
@@ -288,7 +350,9 @@ impl MaxRectsBinPack {
                 let leftover_vert = (rect.height - height).abs();
                 let short_side_fit = std::cmp::min(leftover_horiz, leftover_vert);
 
-                if area_fit < best_area_fit || (area_fit == best_area_fit && short_side_fit < best_short_side_fit) {
+                if area_fit < best_area_fit
+                    || (area_fit == best_area_fit && short_side_fit < best_short_side_fit)
+                {
                     best_node.x = rect.x;
                     best_node.y = rect.y;
                     best_node.width = width;
@@ -302,7 +366,9 @@ impl MaxRectsBinPack {
                 let leftover_vert = (rect.height - width).abs();
                 let short_side_fit = std::cmp::min(leftover_horiz, leftover_vert);
 
-                if area_fit < best_area_fit || (area_fit == best_area_fit && short_side_fit < best_short_side_fit) {
+                if area_fit < best_area_fit
+                    || (area_fit == best_area_fit && short_side_fit < best_short_side_fit)
+                {
                     best_node.x = rect.x;
                     best_node.y = rect.y;
                     best_node.width = height;
@@ -315,7 +381,12 @@ impl MaxRectsBinPack {
 
         (best_node, best_area_fit, best_short_side_fit)
     }
-    fn find_position_for_new_node_contact_point(&self, rot: bool, width: i32, height: i32) -> (Rect, i32) {
+    fn find_position_for_new_node_contact_point(
+        &self,
+        rot: bool,
+        width: i32,
+        height: i32,
+    ) -> (Rect, i32) {
         let mut best_node = Rect::default();
 
         let mut best_contact_score = -1;
@@ -347,15 +418,19 @@ impl MaxRectsBinPack {
         (best_node, best_contact_score)
     }
 
-
     fn split_free_node(&mut self, free_node: &Rect, used_node: &Rect) -> bool {
         // Test if the rectangles even intersect.
-        if used_node.x >= free_node.x + free_node.width || used_node.x + used_node.width <= free_node.x ||
-            used_node.y >= free_node.y + free_node.height || used_node.y + used_node.height <= free_node.y {
-                return false;
-            }
+        if used_node.x >= free_node.x + free_node.width
+            || used_node.x + used_node.width <= free_node.x
+            || used_node.y >= free_node.y + free_node.height
+            || used_node.y + used_node.height <= free_node.y
+        {
+            return false;
+        }
 
-        if used_node.x < free_node.x + free_node.width && used_node.x + used_node.width > free_node.x {
+        if used_node.x < free_node.x + free_node.width
+            && used_node.x + used_node.width > free_node.x
+        {
             // New node at the top side of the used node
             if used_node.y > free_node.y && used_node.y < free_node.y + free_node.height {
                 let mut new_node = free_node.clone();
@@ -372,7 +447,9 @@ impl MaxRectsBinPack {
             }
         }
 
-        if used_node.y < free_node.y + free_node.height && used_node.y + used_node.height > free_node.y {
+        if used_node.y < free_node.y + free_node.height
+            && used_node.y + used_node.height > free_node.y
+        {
             // New node at the left side of the used node.
             if used_node.x > free_node.x && used_node.x < free_node.x + free_node.width {
                 let mut new_node = free_node.clone();
@@ -399,12 +476,12 @@ impl MaxRectsBinPack {
             while j < self.free_rectangles.len() {
                 let a = &self.free_rectangles[i];
                 let b = &self.free_rectangles[j];
-                if a.isContainedIn(b) {
+                if a.is_contained_in(b) {
                     self.free_rectangles.remove(i);
                     i -= 1;
                     break;
                 }
-                if b.isContainedIn(a) {
+                if b.is_contained_in(a) {
                     self.free_rectangles.remove(j);
                     j -= 1;
                 }

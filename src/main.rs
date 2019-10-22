@@ -1,8 +1,8 @@
+use metrohash::MetroHash;
+use std::fs::metadata;
+use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use structopt::StructOpt;
-use metrohash::{MetroHash};
-use std::hash::{Hash, Hasher};
-use std::fs::metadata;
 
 mod bin_packs;
 mod error;
@@ -13,8 +13,8 @@ mod rect;
 mod serial;
 
 use error::Result;
-use path_glob::Glob;
 use image_wrapper::ImageWrapper;
+use path_glob::Glob;
 
 /// A texture packer
 #[derive(StructOpt, Debug, Hash)]
@@ -39,7 +39,6 @@ struct Opt {
     /// Premultiplies the pixels of the bitmaps by their alpha channel
     #[structopt(short, long)]
     premultiply: bool,
-    
     /// Trims excess transparency off the bitmaps
     #[structopt(short, long)]
     trim: bool,
@@ -96,15 +95,34 @@ fn hash_file(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> {
     Ok(())
 }
 
-fn load_image<P: AsRef<std::path::Path>>(path: P, images: &mut Vec<ImageWrapper>, opt: &Opt) -> Result<()> {
+fn load_image<P: AsRef<std::path::Path>>(
+    path: P,
+    images: &mut Vec<ImageWrapper>,
+    opt: &Opt,
+) -> Result<()> {
+    if opt.verbose {
+        println!("Reading file {}", path.as_ref().to_string_lossy());
+    }
     let img = image::open(path.as_ref().clone())?.to_rgba();
-    let img = ImageWrapper::new(img, String::from(path.as_ref().to_str().unwrap()), opt.premultiply, opt.trim);
+    let img = ImageWrapper::new(
+        img,
+        String::from(path.as_ref().to_str().unwrap()),
+        opt.premultiply,
+        opt.trim,
+    );
     images.push(img);
     Ok(())
 }
 
-fn load_images<P: AsRef<std::path::Path>>(path: P, images: &mut Vec<ImageWrapper>, opt: &Opt) -> Result<()> {
-    let dir_iter = std::fs::read_dir(path)?;
+fn load_images<P: AsRef<std::path::Path>>(
+    path: P,
+    images: &mut Vec<ImageWrapper>,
+    opt: &Opt,
+) -> Result<()> {
+    let dir_iter = std::fs::read_dir(&path)?;
+    if opt.verbose {
+        println!("Reading directory {}", path.as_ref().to_string_lossy());
+    }
     for dir in dir_iter {
         let dir = dir?;
         if dir.metadata()?.is_dir() {
@@ -131,8 +149,14 @@ fn main() -> Result<()> {
         return Err(error::ImpactError::InvalidPadding { size: opt.pad });
     }
 
-    let output_dir = opt.output.parent().expect("could not retrieve output directory");
-    let output_name = opt.output.file_name().expect("could not retrieve output filename");
+    let output_dir = opt
+        .output
+        .parent()
+        .expect("could not retrieve output directory");
+    let output_name = opt
+        .output
+        .file_name()
+        .expect("could not retrieve output filename");
 
     // Hash the arguments and input directories
     let mut hasher = MetroHash::default();
@@ -149,17 +173,14 @@ fn main() -> Result<()> {
     let hash_str = format!("{}", hash);
 
     // Load the old hash
-    let hash_path = {
-        let mut hash_path = output_dir.clone().to_path_buf();
-        hash_path.push(output_name);
-        hash_path.set_extension("hash");
-        hash_path
-    };
+    let hash_path = output_dir
+        .join(&format!("{}", output_name.to_string_lossy()))
+        .with_extension("hash");
     if hash_path.exists() {
         let contents = std::fs::read_to_string(&hash_path)?;
         if !opt.force && contents == hash_str {
             println!("Atlas is unchanged: {}", output_name.to_string_lossy());
-            return Ok(())
+            return Ok(());
         }
     }
 
@@ -168,29 +189,37 @@ fn main() -> Result<()> {
     }
 
     // Remove old files
-    let mut hash_path = output_dir.clone().to_path_buf();
-    hash_path.push(output_name);
-    hash_path.set_extension("hash");
     if hash_path.exists() {
         std::fs::remove_file(&hash_path)?;
     }
-    hash_path.set_extension("bin");
-    if hash_path.exists() {
-        std::fs::remove_file(&hash_path)?;
+    let bin_path = output_dir
+        .join(&format!("{}", output_name.to_string_lossy()))
+        .with_extension("bin");
+    if bin_path.exists() {
+        std::fs::remove_file(&bin_path)?;
     }
-    hash_path.set_extension("xml");
-    if hash_path.exists() {
-        std::fs::remove_file(&hash_path)?;
+
+    let xml_path = output_dir
+        .join(&format!("{}", output_name.to_string_lossy()))
+        .with_extension("xml");
+    if xml_path.exists() {
+        std::fs::remove_file(&xml_path)?;
     }
-    hash_path.set_extension("json");
-    if hash_path.exists() {
-        std::fs::remove_file(&hash_path)?;
+
+    let json_path = output_dir
+        .join(&format!("{}", output_name.to_string_lossy()))
+        .with_extension("json");
+    if json_path.exists() {
+        std::fs::remove_file(&json_path)?;
     }
-    hash_path.pop();
-    for atlas in hash_path.glob(&format!("{}*.png", output_name.to_string_lossy())).expect("failed to read glob pattern") {
+
+    for atlas in output_dir
+        .glob(&format!("{}*.png", output_name.to_string_lossy()))
+        .expect("failed to read glob pattern")
+    {
         match atlas {
             Ok(path) => std::fs::remove_file(&path)?,
-            Err(_) => ()
+            Err(_) => (),
         }
     }
 
@@ -207,6 +236,9 @@ fn main() -> Result<()> {
             load_image(input, &mut images, &opt)?;
         }
     }
+    if opt.verbose {
+        println!("loaded {} images.", images.len());
+    }
 
     // Sort the bitmaps by area
     images.sort_unstable_by(|a: &ImageWrapper, b: &ImageWrapper| {
@@ -221,12 +253,19 @@ fn main() -> Result<()> {
         }
         let mut packer = packer::Packer::new(opt.size as i32, opt.size as i32, opt.pad as i32);
         packer.pack(&mut images, opt.verbose, opt.unique, opt.rotate);
-        
         if opt.verbose {
-            println!("finished packing {} - ({}x{})", packers.len(), packer.width, packer.height);
+            println!(
+                "finished packing {} - ({}x{})",
+                packers.len(),
+                packer.width,
+                packer.height
+            );
         }
         if packer.images.is_empty() {
-            eprintln!("packing failed, could not fit image {}", images.first().unwrap().name);
+            eprintln!(
+                "packing failed, could not fit image {}",
+                images.first().unwrap().name
+            );
             return Err(error::ImpactError::CantFitError);
         }
         packers.push(packer);
@@ -234,17 +273,17 @@ fn main() -> Result<()> {
 
     // Save the atlas image
     for (idx, packer) in packers.iter().enumerate() {
-        let out_path = output_dir.join(&format!("{}{}", output_name.to_string_lossy(), idx)).with_extension(".png");
+        let out_path = output_dir
+            .join(&format!("{}{}", output_name.to_string_lossy(), idx))
+            .with_extension("png");
         if opt.verbose {
             println!("writing png {}", out_path.display());
         }
-        packer.save_png(output_dir.join(output_name).with_extension(".png"))?;
+        packer.save_png(out_path)?;
     }
 
     // Create info
-    let mut atlas = serial::Atlas {
-        textures: vec![],
-    };
+    let mut atlas = serial::Atlas { textures: vec![] };
 
     for (idx, packer) in packers.iter().enumerate() {
         let name = output_name.to_string_lossy();
@@ -255,6 +294,7 @@ fn main() -> Result<()> {
         for (img_idx, img) in packer.images.iter().enumerate() {
             let p = &packer.points[img_idx];
             let s_img = serial::Image {
+                name: String::from(&img.name),
                 x: p.x,
                 y: p.y,
                 width: img.width,
@@ -272,7 +312,9 @@ fn main() -> Result<()> {
 
     // Save the atlas binary
     if opt.binary {
-        let out_path = output_dir.join(&format!("{}", output_name.to_string_lossy())).with_extension(".bin");
+        let out_path = output_dir
+            .join(&format!("{}", output_name.to_string_lossy()))
+            .with_extension("bin");
         if opt.verbose {
             println!("writing binary {}", out_path.display());
         }
@@ -282,7 +324,9 @@ fn main() -> Result<()> {
 
     // Save the atlas xml
     if opt.xml {
-        let out_path = output_dir.join(&format!("{}", output_name.to_string_lossy())).with_extension(".xml");
+        let out_path = output_dir
+            .join(&format!("{}", output_name.to_string_lossy()))
+            .with_extension("xml");
         if opt.verbose {
             println!("writing xml {}", out_path.display());
         }
@@ -292,16 +336,18 @@ fn main() -> Result<()> {
 
     // Save the atlas json
     if opt.json {
-        let out_path = output_dir.join(&format!("{}", output_name.to_string_lossy())).with_extension(".json");
+        let out_path = output_dir
+            .join(&format!("{}", output_name.to_string_lossy()))
+            .with_extension("json");
         if opt.verbose {
             println!("writing json {}", out_path.display());
         }
-        let res = serde_json::to_vec(&atlas).expect("failed to serialize into json");
+        let res = serde_json::to_vec_pretty(&atlas).expect("failed to serialize into json");
         std::fs::write(out_path, &res)?;
     }
 
     // Save the new hash
+    println!("Writing to {:?}", hash_path);
     std::fs::write(&hash_path, hash_str)?;
-    
     Ok(())
 }

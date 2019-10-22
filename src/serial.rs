@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Atlas {
@@ -11,11 +11,13 @@ pub struct Texture {
     #[serde(rename = "n")]
     pub name: String,
     #[serde(rename = "imgs")]
-    pub images: Vec<Image>
+    pub images: Vec<Image>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Image {
+    #[serde(rename = "n")]
+    pub name: String,
     pub x: i32,
     pub y: i32,
     #[serde(rename = "w")]
