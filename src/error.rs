@@ -16,6 +16,10 @@ pub enum ImpactError {
     },
     #[fail(display = "can't fit image in atlas")]
     CantFitError,
+    #[fail(display = "xml error: {}", err)]
+    XmlError {
+        err: xml::writer::Error
+    }
 }
 
 impl From<std::io::Error> for ImpactError {
@@ -27,6 +31,12 @@ impl From<std::io::Error> for ImpactError {
 impl From<image::ImageError> for ImpactError {
     fn from(err: image::ImageError) -> ImpactError {
         ImpactError::ImageError { err }
+    }
+}
+
+impl From<xml::writer::Error> for ImpactError {
+    fn from(err: xml::writer::Error) -> ImpactError {
+        ImpactError::XmlError { err }
     }
 }
 

@@ -330,8 +330,7 @@ fn main() -> Result<()> {
         if opt.verbose {
             println!("writing xml {}", out_path.display());
         }
-        let res = serde_xml_rs::to_string(&atlas).expect("failed to serialize into xml");
-        std::fs::write(out_path, &res)?;
+        atlas.write_to_xml_file(out_path)?;
     }
 
     // Save the atlas json
