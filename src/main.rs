@@ -105,6 +105,27 @@ struct Opt {
     inputs: Vec<PathBuf>,
 }
 
+/// Use the available extensions in the `image` crate to determine if a file extension
+/// is associated with an image or not.
+fn is_image_file<P: AsRef<std::path::Path>>(path: P) -> bool {
+    let p = path.as_ref();
+    let ext = p.extension().
+        and_then(|s| s.to_str())
+        .map_or("".to_string(), |s| s.to_ascii_lowercase());
+    match &*ext {
+        "ico" => true,
+        "jpg" | "jpeg" => true,
+        "png" => true,
+        "pbm" => true,
+        "pgm" => true,
+        "ppm" => true,
+        "pam" => true,
+        "bmp" => true,
+        "tif" | "tiff" => true,
+        _ => false,
+    }
+}
+
 fn hash_files(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> {
     let dir_iter = std::fs::read_dir(path)?;
     for dir in dir_iter {
@@ -119,8 +140,10 @@ fn hash_files(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> 
 }
 
 fn hash_file(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> {
-    let bytes = std::fs::read(path)?;
-    hasher.write(&bytes);
+    if is_image_file(path) {
+        let bytes = std::fs::read(path)?;
+        hasher.write(&bytes);
+    }
     Ok(())
 }
 
@@ -129,17 +152,21 @@ fn load_image<P: AsRef<std::path::Path>>(
     images: &mut Vec<ImageWrapper>,
     opt: &Opt,
 ) -> Result<()> {
-    if opt.verbose {
-        println!("Reading file {}", path.as_ref().to_string_lossy());
+    if is_image_file(&path) {
+        if opt.verbose {
+            println!("Reading file {}", path.as_ref().to_string_lossy());
+        }
+        let img = image::open(path.as_ref().clone())?.to_rgba();
+        let img = ImageWrapper::new(
+            img,
+            String::from(path.as_ref().to_str().unwrap()),
+            opt.premultiply,
+            opt.trim,
+        );
+        images.push(img);
+    } else if opt.verbose {
+        println!("File {} is not an image, skipping...", path.as_ref().to_string_lossy());
     }
-    let img = image::open(path.as_ref().clone())?.to_rgba();
-    let img = ImageWrapper::new(
-        img,
-        String::from(path.as_ref().to_str().unwrap()),
-        opt.premultiply,
-        opt.trim,
-    );
-    images.push(img);
     Ok(())
 }
 
