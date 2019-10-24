@@ -96,6 +96,10 @@ struct Opt {
     #[structopt(short, long, possible_values = &FreeRectChoiceHeuristic::variants(), default_value = "BestShortSideFit", case_insensitive = true)]
     heuristic: FreeRectChoiceHeuristic,
 
+    /// The image format to use when saving atlas images
+    #[structopt(short, long, default_value = "png", possible_values = &["ico", "jpg", "jpeg", "png", "pbm", "pgm", "ppm", "pam", "bmp", "tif", "tiff"], case_insensitive = true)]
+    extension: String,
+
     /// File to output
     #[structopt(name = "OUTPUT", parse(from_os_str))]
     output: PathBuf,
@@ -270,7 +274,7 @@ fn main() -> Result<()> {
     }
 
     for atlas in output_dir
-        .glob(&format!("{}*.png", output_name.to_string_lossy()))
+        .glob(&format!("{}*.{}", output_name.to_string_lossy(), &opt.extension))
         .expect("failed to read glob pattern")
     {
         match atlas {
@@ -331,9 +335,9 @@ fn main() -> Result<()> {
     for (idx, packer) in packers.iter().enumerate() {
         let out_path = output_dir
             .join(&format!("{}{}", output_name.to_string_lossy(), idx))
-            .with_extension("png");
+            .with_extension(&opt.extension);
         if opt.verbose {
-            println!("writing png {}", out_path.display());
+            println!("writing image {}", out_path.display());
         }
         packer.save_png(out_path)?;
     }
