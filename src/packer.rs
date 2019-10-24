@@ -40,6 +40,7 @@ impl Packer {
         verbose: bool,
         unique: bool,
         rotate: bool,
+        method: FreeRectChoiceHeuristic,
     ) {
         let mut packer = MaxRectsBinPack::new(self.width, self.height);
 
@@ -81,7 +82,7 @@ impl Packer {
                     image.width + self.pad,
                     image.height + self.pad,
                     rotate,
-                    FreeRectChoiceHeuristic::RectBestShortSideFit,
+                    method,
                 );
 
                 if rect.width == 0 || rect.height == 0 {

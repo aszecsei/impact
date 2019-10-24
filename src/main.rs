@@ -3,6 +3,7 @@ use std::fs::metadata;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
 use structopt::StructOpt;
+use structopt::clap::arg_enum;
 
 mod bin_packs;
 mod error;
@@ -15,6 +16,30 @@ mod serial;
 use error::Result;
 use image_wrapper::ImageWrapper;
 use path_glob::Glob;
+
+arg_enum! {
+    #[derive(Debug, Copy, Clone, Hash)]
+    enum FreeRectChoiceHeuristic {
+        BestShortSideFit,
+        BestLongSideFit,
+        BestAreaFit,
+        BottomLeftRule,
+        ContactPointRule,
+    }
+}
+
+impl Into<bin_packs::max_rects::FreeRectChoiceHeuristic> for FreeRectChoiceHeuristic {
+    fn into(self) -> bin_packs::max_rects::FreeRectChoiceHeuristic {
+        match self {
+            FreeRectChoiceHeuristic::BestShortSideFit => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestShortSideFit,
+            FreeRectChoiceHeuristic::BestLongSideFit => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestLongSideFit,
+            FreeRectChoiceHeuristic::BestAreaFit => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestAreaFit,
+            FreeRectChoiceHeuristic::BottomLeftRule => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBottomLeftRule,
+            FreeRectChoiceHeuristic::ContactPointRule => bin_packs::max_rects::FreeRectChoiceHeuristic::RectContactPointRule,
+        }
+    }
+}
+
 
 /// A texture packer
 #[derive(StructOpt, Debug, Hash)]
@@ -64,8 +89,12 @@ struct Opt {
     size: u16,
 
     /// Padding between images (can be from 0 to 16)
-    #[structopt(long, default_value = "1")]
+    #[structopt(short = "P", long, default_value = "1")]
     pad: u8,
+
+    /// The image-packing heuristic to use
+    #[structopt(short, long, possible_values = &FreeRectChoiceHeuristic::variants(), default_value = "BestShortSideFit", case_insensitive = true)]
+    heuristic: FreeRectChoiceHeuristic,
 
     /// File to output
     #[structopt(name = "OUTPUT", parse(from_os_str))]
@@ -252,7 +281,7 @@ fn main() -> Result<()> {
             println!("packing {} images...", images.len());
         }
         let mut packer = packer::Packer::new(opt.size as i32, opt.size as i32, opt.pad as i32);
-        packer.pack(&mut images, opt.verbose, opt.unique, opt.rotate);
+        packer.pack(&mut images, opt.verbose, opt.unique, opt.rotate, opt.heuristic.into());
         if opt.verbose {
             println!(
                 "finished packing {} - ({}x{})",
