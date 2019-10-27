@@ -2,8 +2,8 @@ use metrohash::MetroHash;
 use std::fs::metadata;
 use std::hash::{Hash, Hasher};
 use std::path::PathBuf;
-use structopt::StructOpt;
 use structopt::clap::arg_enum;
+use structopt::StructOpt;
 
 mod bin_packs;
 mod error;
@@ -31,15 +31,24 @@ arg_enum! {
 impl Into<bin_packs::max_rects::FreeRectChoiceHeuristic> for FreeRectChoiceHeuristic {
     fn into(self) -> bin_packs::max_rects::FreeRectChoiceHeuristic {
         match self {
-            FreeRectChoiceHeuristic::BestShortSideFit => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestShortSideFit,
-            FreeRectChoiceHeuristic::BestLongSideFit => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestLongSideFit,
-            FreeRectChoiceHeuristic::BestAreaFit => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestAreaFit,
-            FreeRectChoiceHeuristic::BottomLeftRule => bin_packs::max_rects::FreeRectChoiceHeuristic::RectBottomLeftRule,
-            FreeRectChoiceHeuristic::ContactPointRule => bin_packs::max_rects::FreeRectChoiceHeuristic::RectContactPointRule,
+            FreeRectChoiceHeuristic::BestShortSideFit => {
+                bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestShortSideFit
+            }
+            FreeRectChoiceHeuristic::BestLongSideFit => {
+                bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestLongSideFit
+            }
+            FreeRectChoiceHeuristic::BestAreaFit => {
+                bin_packs::max_rects::FreeRectChoiceHeuristic::RectBestAreaFit
+            }
+            FreeRectChoiceHeuristic::BottomLeftRule => {
+                bin_packs::max_rects::FreeRectChoiceHeuristic::RectBottomLeftRule
+            }
+            FreeRectChoiceHeuristic::ContactPointRule => {
+                bin_packs::max_rects::FreeRectChoiceHeuristic::RectContactPointRule
+            }
         }
     }
 }
-
 
 /// A texture packer
 #[derive(StructOpt, Debug, Hash)]
@@ -113,8 +122,9 @@ struct Opt {
 /// is associated with an image or not.
 fn is_image_file<P: AsRef<std::path::Path>>(path: P) -> bool {
     let p = path.as_ref();
-    let ext = p.extension().
-        and_then(|s| s.to_str())
+    let ext = p
+        .extension()
+        .and_then(|s| s.to_str())
         .map_or("".to_string(), |s| s.to_ascii_lowercase());
     match &*ext {
         "ico" => true,
@@ -161,15 +171,21 @@ fn load_image<P: AsRef<std::path::Path>>(
             println!("Reading file {}", path.as_ref().to_string_lossy());
         }
         let img = image::open(path.as_ref().clone())?.to_rgba();
+        let mut given_path = path.as_ref().to_path_buf();
+        given_path.pop();
+        given_path.push(path.as_ref().file_stem().unwrap());
         let img = ImageWrapper::new(
             img,
-            String::from(path.as_ref().to_str().unwrap()),
+            String::from(given_path.to_str().unwrap()),
             opt.premultiply,
             opt.trim,
         );
         images.push(img);
     } else if opt.verbose {
-        println!("File {} is not an image, skipping...", path.as_ref().to_string_lossy());
+        println!(
+            "File {} is not an image, skipping...",
+            path.as_ref().to_string_lossy()
+        );
     }
     Ok(())
 }
@@ -274,7 +290,11 @@ fn main() -> Result<()> {
     }
 
     for atlas in output_dir
-        .glob(&format!("{}*.{}", output_name.to_string_lossy(), &opt.extension))
+        .glob(&format!(
+            "{}*.{}",
+            output_name.to_string_lossy(),
+            &opt.extension
+        ))
         .expect("failed to read glob pattern")
     {
         match atlas {
@@ -312,7 +332,13 @@ fn main() -> Result<()> {
             println!("packing {} images...", images.len());
         }
         let mut packer = packer::Packer::new(opt.size as i32, opt.size as i32, opt.pad as i32);
-        packer.pack(&mut images, opt.verbose, opt.unique, opt.rotate, opt.heuristic.into());
+        packer.pack(
+            &mut images,
+            opt.verbose,
+            opt.unique,
+            opt.rotate,
+            opt.heuristic.into(),
+        );
         if opt.verbose {
             println!(
                 "finished packing {} - ({}x{})",
