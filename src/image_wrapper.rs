@@ -13,10 +13,11 @@ pub struct ImageWrapper {
     pub frame_h: i32,
     pub data: Vec<u8>,
     pub hash_value: u64,
+    pub original_size: u64,
 }
 
 impl ImageWrapper {
-    pub fn new(image: RgbaImage, name: String, premultiply: bool, trim: bool) -> Self {
+    pub fn new(image: RgbaImage, name: String, premultiply: bool, trim: bool, original_size: u64) -> Self {
         let w = image.width() as i32;
         let h = image.height() as i32;
 
@@ -59,7 +60,7 @@ impl ImageWrapper {
                 min_y = 0;
                 max_x = w - 1;
                 max_y = h - 1;
-                println!("image is completely transparent: {}", &name);
+                log::warn!("image is completely transparent: {}", &name);
             }
         } else {
             min_x = 0;
@@ -118,6 +119,7 @@ impl ImageWrapper {
             frame_h,
             data,
             hash_value,
+            original_size,
         }
     }
 
@@ -132,6 +134,7 @@ impl ImageWrapper {
             frame_h: width,
             data: vec![0; (width * height) as usize * 4],
             hash_value: 0,
+            original_size: 0,
         }
     }
 

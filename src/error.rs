@@ -19,6 +19,10 @@ pub enum ImpactError {
     #[fail(display = "xml error: {}", err)]
     XmlError {
         err: xml::writer::Error
+    },
+    #[fail(display = "log error: {}", err)]
+    LoggerError {
+        err: log::SetLoggerError
     }
 }
 
@@ -37,6 +41,12 @@ impl From<image::ImageError> for ImpactError {
 impl From<xml::writer::Error> for ImpactError {
     fn from(err: xml::writer::Error) -> ImpactError {
         ImpactError::XmlError { err }
+    }
+}
+
+impl From<log::SetLoggerError> for ImpactError {
+    fn from(err: log::SetLoggerError) -> ImpactError {
+        ImpactError::LoggerError { err }
     }
 }
 

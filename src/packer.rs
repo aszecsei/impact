@@ -37,7 +37,6 @@ impl Packer {
     pub fn pack(
         &mut self,
         images: &mut Vec<ImageWrapper>,
-        verbose: bool,
         unique: bool,
         rotate: bool,
         method: FreeRectChoiceHeuristic,
@@ -47,16 +46,12 @@ impl Packer {
         let mut ww = 0;
         let mut hh = 0;
 
-        if verbose {
-            println!("\tpacking begin...");
-        }
+        log::info!("packing begin...");
 
         while !images.is_empty() {
             let image = images.pop().unwrap();
 
-            if verbose {
-                println!("\t{}: {}", images.len(), image.name);
-            }
+            log::info!("{}: {}", images.len(), image.name);
 
             if unique {
                 if self.dup_lookup.contains_key(&image.hash_value) {
@@ -67,9 +62,7 @@ impl Packer {
                         self.points.push(p);
                         self.images.push(image);
 
-                        if verbose {
-                            println!("\tDuplicate found");
-                        }
+                        log::info!("duplicate found");
 
                         continue;
                     }
@@ -86,6 +79,7 @@ impl Packer {
                 );
 
                 if rect.width == 0 || rect.height == 0 {
+                    images.push(image);
                     break;
                 }
 
@@ -109,9 +103,7 @@ impl Packer {
             }
         }
 
-        if verbose {
-            println!("\tpacking complete. resizing...");
-        }
+        log::info!("packing complete. resizing...");
 
         while self.width / 2 >= ww {
             self.width /= 2;
@@ -132,6 +124,14 @@ impl Packer {
                 }
             }
         }
-        img.save_as(file)
+        img.save_as(file.as_ref())?;
+
+        {
+            use humansize::{FileSize, file_size_opts as options};
+            let size = std::fs::metadata(file.as_ref())?.len();
+            log::info!("saving atlas. image size: {}", size.file_size(options::CONVENTIONAL).unwrap());
+        }
+
+        Ok(())
     }
 }

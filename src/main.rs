@@ -17,6 +17,9 @@ use error::Result;
 use image_wrapper::ImageWrapper;
 use path_glob::Glob;
 
+// Trait for extending std::path::PathBuf
+use path_slash::PathBufExt;
+
 arg_enum! {
     #[derive(Debug, Copy, Clone, Hash)]
     enum FreeRectChoiceHeuristic {
@@ -78,8 +81,8 @@ struct Opt {
     trim: bool,
 
     /// Print to the debug console as the packer works
-    #[structopt(short, long)]
-    verbose: bool,
+    #[structopt(short, long, parse(from_occurrences))]
+    verbose: u8,
 
     /// Ignore caching, forcing the packer to repack
     #[structopt(short, long)]
@@ -167,22 +170,22 @@ fn load_image<P: AsRef<std::path::Path>>(
     opt: &Opt,
 ) -> Result<()> {
     if is_image_file(&path) {
-        if opt.verbose {
-            println!("Reading file {}", path.as_ref().to_string_lossy());
-        }
+        log::info!("Reading file {}", path.as_ref().to_string_lossy());
+        let size = std::fs::metadata(path.as_ref())?.len();
         let img = image::open(path.as_ref().clone())?.to_rgba();
         let mut given_path = path.as_ref().to_path_buf();
         given_path.pop();
         given_path.push(path.as_ref().file_stem().unwrap());
         let img = ImageWrapper::new(
             img,
-            String::from(given_path.to_str().unwrap()),
+            given_path.to_slash().unwrap(),
             opt.premultiply,
             opt.trim,
+            size,
         );
         images.push(img);
-    } else if opt.verbose {
-        println!(
+    } else {
+        log::info!(
             "File {} is not an image, skipping...",
             path.as_ref().to_string_lossy()
         );
@@ -196,9 +199,7 @@ fn load_images<P: AsRef<std::path::Path>>(
     opt: &Opt,
 ) -> Result<()> {
     let dir_iter = std::fs::read_dir(&path)?;
-    if opt.verbose {
-        println!("Reading directory {}", path.as_ref().to_string_lossy());
-    }
+    log::info!("Reading directory {}", path.as_ref().to_string_lossy());
     for dir in dir_iter {
         let dir = dir?;
         if dir.metadata()?.is_dir() {
@@ -220,8 +221,46 @@ fn main() -> Result<()> {
         opt.unique = true;
     }
 
+    let log_level = match opt.verbose {
+        0 => log::LevelFilter::Warn,
+        1 => log::LevelFilter::Info,
+        2 => log::LevelFilter::Debug,
+        _ => log::LevelFilter::Trace,
+    };
+
+    let file_config = fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}] {}",
+                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .chain(fern::log_file("impact.log")?)
+        .level(log::LevelFilter::Trace);
+
+    let stderr_config = fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "{}[{}][{}] {}",
+                chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                record.target(),
+                record.level(),
+                message
+            ))
+        })
+        .level(log_level)
+        .chain(std::io::stderr());
+    
+    fern::Dispatch::new()
+        .chain(file_config)
+        .chain(stderr_config)
+        .apply()?;
+
     if opt.pad > 16 {
-        eprintln!("Invalid padding value: {}", opt.pad);
+        log::error!("Invalid padding value: {}", opt.pad);
         return Err(error::ImpactError::InvalidPadding { size: opt.pad });
     }
 
@@ -255,14 +294,12 @@ fn main() -> Result<()> {
     if hash_path.exists() {
         let contents = std::fs::read_to_string(&hash_path)?;
         if !opt.force && contents == hash_str {
-            println!("Atlas is unchanged: {}", output_name.to_string_lossy());
+            log::info!("Atlas is unchanged: {}", output_name.to_string_lossy());
             return Ok(());
         }
     }
 
-    if opt.verbose {
-        println!("Options:\n{:?}", opt);
-    }
+    log::trace!("Options:\n{:?}", opt);
 
     // Remove old files
     if hash_path.exists() {
@@ -304,9 +341,7 @@ fn main() -> Result<()> {
     }
 
     // Load the bitmaps from all the input files and directories
-    if opt.verbose {
-        println!("loading images...");
-    }
+    log::info!("loading images...");
     let mut images = vec![];
     for input in &opt.inputs {
         let md = metadata(input)?;
@@ -316,8 +351,12 @@ fn main() -> Result<()> {
             load_image(input, &mut images, &opt)?;
         }
     }
-    if opt.verbose {
-        println!("loaded {} images.", images.len());
+    log::info!("loaded {} images.", images.len());
+    
+    {
+        use humansize::{FileSize, file_size_opts as options};
+        let size = images.iter().fold(0, |sum, img| sum + img.original_size);
+        log::info!("size of all images: {}", size.file_size(options::CONVENTIONAL).unwrap());
     }
 
     // Sort the bitmaps by area
@@ -328,27 +367,22 @@ fn main() -> Result<()> {
     // Pack the bitmaps
     let mut packers = vec![];
     while !images.is_empty() {
-        if opt.verbose {
-            println!("packing {} images...", images.len());
-        }
+        log::info!("packing {} images...", images.len());
         let mut packer = packer::Packer::new(opt.size as i32, opt.size as i32, opt.pad as i32);
         packer.pack(
             &mut images,
-            opt.verbose,
             opt.unique,
             opt.rotate,
             opt.heuristic.into(),
         );
-        if opt.verbose {
-            println!(
+        log::info!(
                 "finished packing {} - ({}x{})",
                 packers.len(),
                 packer.width,
                 packer.height
             );
-        }
         if packer.images.is_empty() {
-            eprintln!(
+            log::error!(
                 "packing failed, could not fit image {}",
                 images.first().unwrap().name
             );
@@ -362,9 +396,7 @@ fn main() -> Result<()> {
         let out_path = output_dir
             .join(&format!("{}{}", output_name.to_string_lossy(), idx))
             .with_extension(&opt.extension);
-        if opt.verbose {
-            println!("writing image {}", out_path.display());
-        }
+        log::info!("writing image {}", out_path.display());
         packer.save_png(out_path)?;
     }
 
@@ -401,9 +433,7 @@ fn main() -> Result<()> {
         let out_path = output_dir
             .join(&format!("{}", output_name.to_string_lossy()))
             .with_extension("bin");
-        if opt.verbose {
-            println!("writing binary {}", out_path.display());
-        }
+        log::info!("writing binary {}", out_path.display());
         let res = bincode::serialize(&atlas).expect("failed to serialize into binary data");
         std::fs::write(out_path, &res)?;
     }
@@ -413,9 +443,7 @@ fn main() -> Result<()> {
         let out_path = output_dir
             .join(&format!("{}", output_name.to_string_lossy()))
             .with_extension("xml");
-        if opt.verbose {
-            println!("writing xml {}", out_path.display());
-        }
+        log::info!("writing xml {}", out_path.display());
         atlas.write_to_xml_file(out_path)?;
     }
 
@@ -424,9 +452,7 @@ fn main() -> Result<()> {
         let out_path = output_dir
             .join(&format!("{}", output_name.to_string_lossy()))
             .with_extension("json");
-        if opt.verbose {
-            println!("writing json {}", out_path.display());
-        }
+        log::info!("writing json {}", out_path.display());
         let res = serde_json::to_vec_pretty(&atlas).expect("failed to serialize into json");
         std::fs::write(out_path, &res)?;
     }
