@@ -75,7 +75,7 @@ impl ImageWrapper {
         let frame_w = w;
         let frame_h = h;
 
-        let (frame_x, frame_y, data) = if width == w {
+        let (frame_x, frame_y, data) = if width == w && height == h {
             (0, 0, pixels)
         } else {
             // create the trimmed image data
