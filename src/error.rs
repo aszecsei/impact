@@ -3,27 +3,19 @@ use failure::Fail;
 #[derive(Debug, Fail)]
 pub enum ImpactError {
     #[fail(display = "invalid padding size: {}", size)]
-    InvalidPadding {
-        size: u8,
-    },
+    InvalidPadding { size: u8 },
     #[fail(display = "I/O error: {}", err)]
-    IoError {
-        err: std::io::Error,
-    },
+    IoError { err: std::io::Error },
     #[fail(display = "Image error: {}", err)]
-    ImageError {
-        err: image::ImageError,
-    },
+    ImageError { err: image::ImageError },
     #[fail(display = "can't fit image in atlas")]
     CantFitError,
     #[fail(display = "xml error: {}", err)]
-    XmlError {
-        err: xml::writer::Error
-    },
+    XmlError { err: xml::writer::Error },
     #[fail(display = "log error: {}", err)]
-    LoggerError {
-        err: log::SetLoggerError
-    }
+    LoggerError { err: log::SetLoggerError },
+    #[fail(display = "strip prefix error: {}", err)]
+    StripPrefixError { err: std::path::StripPrefixError },
 }
 
 impl From<std::io::Error> for ImpactError {
@@ -47,6 +39,12 @@ impl From<xml::writer::Error> for ImpactError {
 impl From<log::SetLoggerError> for ImpactError {
     fn from(err: log::SetLoggerError) -> ImpactError {
         ImpactError::LoggerError { err }
+    }
+}
+
+impl From<std::path::StripPrefixError> for ImpactError {
+    fn from(err: std::path::StripPrefixError) -> ImpactError {
+        ImpactError::StripPrefixError { err }
     }
 }
 

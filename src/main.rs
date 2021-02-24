@@ -164,8 +164,9 @@ fn hash_file(path: &PathBuf, hasher: &mut dyn std::hash::Hasher) -> Result<()> {
     Ok(())
 }
 
-fn load_image<P: AsRef<std::path::Path>>(
+fn load_image<P: AsRef<std::path::Path>, Q: AsRef<std::path::Path>>(
     path: P,
+    prefix: Q,
     images: &mut Vec<ImageWrapper>,
     opt: &Opt,
 ) -> Result<()> {
@@ -178,7 +179,11 @@ fn load_image<P: AsRef<std::path::Path>>(
         given_path.push(path.as_ref().file_stem().unwrap());
         let img = ImageWrapper::new(
             img,
-            given_path.to_slash().unwrap(),
+            given_path
+                .strip_prefix(prefix)?
+                .to_owned()
+                .to_slash()
+                .unwrap(),
             opt.premultiply,
             opt.trim,
             size,
@@ -193,8 +198,9 @@ fn load_image<P: AsRef<std::path::Path>>(
     Ok(())
 }
 
-fn load_images<P: AsRef<std::path::Path>>(
+fn load_images<P: AsRef<std::path::Path>, Q: AsRef<std::path::Path> + Copy>(
     path: P,
+    prefix: Q,
     images: &mut Vec<ImageWrapper>,
     opt: &Opt,
 ) -> Result<()> {
@@ -203,9 +209,9 @@ fn load_images<P: AsRef<std::path::Path>>(
     for dir in dir_iter {
         let dir = dir?;
         if dir.metadata()?.is_dir() {
-            load_images(&dir.path(), images, opt)?;
+            load_images(&dir.path(), prefix, images, opt)?;
         } else {
-            load_image(&dir.path(), images, opt)?;
+            load_image(&dir.path(), prefix, images, opt)?;
         }
     }
     Ok(())
@@ -253,7 +259,6 @@ fn main() -> Result<()> {
         })
         .level(log_level)
         .chain(std::io::stderr());
-    
     fern::Dispatch::new()
         .chain(file_config)
         .chain(stderr_config)
@@ -346,17 +351,19 @@ fn main() -> Result<()> {
     for input in &opt.inputs {
         let md = metadata(input)?;
         if md.is_dir() {
-            load_images(input, &mut images, &opt)?;
+            load_images(input, input, &mut images, &opt)?;
         } else {
-            load_image(input, &mut images, &opt)?;
+            load_image(input, input.parent().unwrap(), &mut images, &opt)?; // TODO: Improve this error handling
         }
     }
     log::info!("loaded {} images.", images.len());
-    
     {
-        use humansize::{FileSize, file_size_opts as options};
+        use humansize::{file_size_opts as options, FileSize};
         let size = images.iter().fold(0, |sum, img| sum + img.original_size);
-        log::info!("size of all images: {}", size.file_size(options::CONVENTIONAL).unwrap());
+        log::info!(
+            "size of all images: {}",
+            size.file_size(options::CONVENTIONAL).unwrap()
+        );
     }
 
     // Sort the bitmaps by area
@@ -369,18 +376,13 @@ fn main() -> Result<()> {
     while !images.is_empty() {
         log::info!("packing {} images...", images.len());
         let mut packer = packer::Packer::new(opt.size as i32, opt.size as i32, opt.pad as i32);
-        packer.pack(
-            &mut images,
-            opt.unique,
-            opt.rotate,
-            opt.heuristic.into(),
-        );
+        packer.pack(&mut images, opt.unique, opt.rotate, opt.heuristic.into());
         log::info!(
-                "finished packing {} - ({}x{})",
-                packers.len(),
-                packer.width,
-                packer.height
-            );
+            "finished packing {} - ({}x{})",
+            packers.len(),
+            packer.width,
+            packer.height
+        );
         if packer.images.is_empty() {
             log::error!(
                 "packing failed, could not fit image {}",
