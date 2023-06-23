@@ -127,9 +127,9 @@ impl Packer {
         img.save_as(file.as_ref())?;
 
         {
-            use humansize::{FileSize, file_size_opts as options};
+            use humansize::{format_size, DECIMAL};
             let size = std::fs::metadata(file.as_ref())?.len();
-            log::info!("saving atlas. image size: {}", size.file_size(options::CONVENTIONAL).unwrap());
+            log::info!("saving atlas. image size: {}", format_size(size, DECIMAL));
         }
 
         Ok(())

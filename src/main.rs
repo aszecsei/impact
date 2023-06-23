@@ -172,13 +172,13 @@ fn load_image<P: AsRef<std::path::Path>>(
     if is_image_file(&path) {
         log::info!("Reading file {}", path.as_ref().to_string_lossy());
         let size = std::fs::metadata(path.as_ref())?.len();
-        let img = image::open(path.as_ref().clone())?.to_rgba();
+        let img = image::open(path.as_ref().clone())?.to_rgba8();
         let mut given_path = path.as_ref().to_path_buf();
         given_path.pop();
         given_path.push(path.as_ref().file_stem().unwrap());
         let img = ImageWrapper::new(
             img,
-            given_path.to_slash().unwrap(),
+            given_path.to_slash().unwrap().into_owned(),
             opt.premultiply,
             opt.trim,
             size,
@@ -354,9 +354,9 @@ fn main() -> Result<()> {
     log::info!("loaded {} images.", images.len());
     
     {
-        use humansize::{FileSize, file_size_opts as options};
+        use humansize::{format_size, DECIMAL};
         let size = images.iter().fold(0, |sum, img| sum + img.original_size);
-        log::info!("size of all images: {}", size.file_size(options::CONVENTIONAL).unwrap());
+        log::info!("size of all images: {}", format_size(size, DECIMAL));
     }
 
     // Sort the bitmaps by area
