@@ -1,26 +1,26 @@
-use failure::Fail;
+use thiserror::Error;
 
-#[derive(Debug, Fail)]
+#[derive(Debug, Error)]
 pub enum ImpactError {
-    #[fail(display = "invalid padding size: {}", size)]
+    #[error("invalid padding size: {}", size)]
     InvalidPadding {
         size: u8,
     },
-    #[fail(display = "I/O error: {}", err)]
+    #[error("I/O error: {}", err)]
     IoError {
         err: std::io::Error,
     },
-    #[fail(display = "Image error: {}", err)]
+    #[error("Image error: {}", err)]
     ImageError {
         err: image::ImageError,
     },
-    #[fail(display = "can't fit image in atlas")]
+    #[error("can't fit image in atlas")]
     CantFitError,
-    #[fail(display = "xml error: {}", err)]
+    #[error("xml error: {}", err)]
     XmlError {
         err: xml::writer::Error
     },
-    #[fail(display = "log error: {}", err)]
+    #[error("log error: {}", err)]
     LoggerError {
         err: log::SetLoggerError
     }
